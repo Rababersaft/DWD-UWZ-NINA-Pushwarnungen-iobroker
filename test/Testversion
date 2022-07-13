@@ -1,4 +1,4 @@
-//Version 1.0.10
+//Version 1.0.06 TEST
 // Erläuterung Update:
 // Suche im Script nach 123456 und kopiere/ersetze ab diesem Punkt. So braucht ihr die Konfiguration nicht zu erneuern.
 // Link: https://forum.iobroker.net/topic/30616/script-dwd-uwz-nina-warnungen-als-push-sprachnachrichten/
@@ -232,7 +232,6 @@ var sayItVolumen        = [30]; // gleiche Anzahl wie idSayIt
 /* mehrere Einträge möglich, bei mir ging nur der Echo, 2 dots 2.Gen reagieren nicht auf announcement. */
 var idAlexaSerial       = ['']; // die reine Seriennummer des Echos z.B.: var idAlexaSerial =['G090RV32984110Y', 'G090RV32984110Y']
 var alexaVolumen        = [30]; // Lautstärke die gleiche Anzahl an Einträgen wie bei idAlexaSerial
-alexaMultiroomParentsOff = false; // pausiere alle mit den IDs verknüpfte Multiroomgruppen
 
 // Filtereinstellungen über Objekte einstellen
 var minlevel                      =    1 // Warnungen unterhalb dieses Levels nicht senden; (DWD und Nina level 1-4  / UWZ 0-5)
@@ -268,7 +267,7 @@ var scriptOverrides = false; // Die Einstellung im Skript überschreiben bei jed
 // Die Geschwindigkeit gibt an wie lange das Skript wartet bevor es eine neue Nachricht an die Sprachausgabe sendet.
 konstanten[3].delay /*SayIt*/       = 86; // Vorlese Geschwindigkeit pro Zeichen in ms
 konstanten[4].delay /*Home24*/      = 90; // Vorlese Geschwindigkeit pro Zeichen in ms
-konstanten[5].delay /*Alexa*/       = 88; // Vorlese Geschwindigkeit pro Zeichen in ms
+konstanten[5].delay /*Alexa*/       = 86; // Vorlese Geschwindigkeit pro Zeichen in ms
 
 // Mit diesen Optionen verringert man die Nachrichtenlänge in dem Beschreibung oder Handlungsanweisungen
 // nicht der Nachricht hinzugefügt werden.
@@ -405,13 +404,7 @@ statesIntern[NINA].path = internalMowasPath
 var START = new Date();
 var ENDE = new Date();
 var idAlexa = alexaInstanz + '.Echo-Devices.' + placeHolder + '.Commands.announcement';
-var idAlexaVolumen = alexaInstanz + '.Echo-Devices.' + placeHolder + '.Player.volume';
-var idAlexaState = alexaInstanz + '.Echo-Devices.' + placeHolder + '.Player.currentState'
-var idAlexaPause = alexaInstanz + '.Echo-Devices.' + placeHolder + '.Player.controlPause'
-var idAlexaPlay  = alexaInstanz + '.Echo-Devices.' + placeHolder + '.Player.controlPlay'
-var idAlexaParents = alexaInstanz +  '.Echo-Devices.' + placeHolder + '.Info.multiroomParents'
-var idAlexaLastState = []
-
+var idAlexaVolumen = alexaInstanz + '.Echo-Devices.' + placeHolder + '.Commands.speak-volume';
 var autoSendWarnings = true;
 var forceSpeak = false;
 var timer = null;
@@ -460,8 +453,6 @@ if (uTextHtmlMitOhneAlles === undefined)  uTextHtmlMitOhneAlles = false;
 
 var uTelegramReplyMarkupInline
 if (uTelegramReplyMarkupInline === undefined) uTelegramReplyMarkupInline = false;
-
-var alexaMultiroomParentsOff
 
 // Warning types
 var warningTypesString = [];
@@ -813,7 +804,6 @@ for (let a = 0; a < konstanten.length; a++) {
                 ticaLog(0,'Alexa - Serial ' + idAlexaSerial[a] + ' ist fehlerhaft. Überpüfen! Object ID:' + replacePlaceholder(idAlexa, idAlexaSerial[a]), 'error');
                 stopScript(scriptName);
             }
-            idAlexaLastState[a] = {}
         }
     }
 
@@ -2136,7 +2126,7 @@ function _speakTo(dienst, msg) {
                 let entry = _speakToArray[1];
                 if (entry.startTimeSpeak <= new Date()) {
                     if (entry.part > 1) entry.msg = 'Teil ' + entry.part + ':  ' + entry.msg;
-                    let nTime = new Date(new Date().getTime() + (deviceList[entry.dienst].delay * (entry.msg + _getMsgCountString(_speakToArray, entry.dienst)).length)+1900);
+                    let nTime = new Date(new Date().getTime() + (deviceList[entry.dienst].delay * (entry.msg + _getMsgCountString(_speakToArray, entry.dienst)).length));
                     let value = nTime.getTime() - new Date(entry.endTimeSpeak).getTime();
                     for (let a = 1; a < _speakToArray.length; a++) {
                         if (entry.dienst == _speakToArray[a].dienst) {
@@ -2157,46 +2147,10 @@ function _speakTo(dienst, msg) {
                         }
                     } else if (entry.dienst == ALEXA) {
                         for (let a = 0; a < idAlexaSerial.length; a++) {
-                            if (idAlexaLastState[a].ids === undefined) idAlexaLastState[a].ids = {}
                             // Wenn auf Gruppe, keine Lautstärkenregelung möglich
-                            let textids = getState(replacePlaceholder(idAlexaParents, idAlexaSerial[a])).val
-                            if (textids) var ids = textids.split(',')
-                            if (extendedExists(replacePlaceholder(idAlexaState, idAlexaSerial[a]))
-                                && getState(replacePlaceholder(idAlexaState, idAlexaSerial[a])).val) {
-                                idAlexaLastState[a].play = true
-                                setState(replacePlaceholder(idAlexaPause, idAlexaSerial[a]), true)
-                            } else if (alexaMultiroomParentsOff && Array.isArray(ids)) {
-                                for (let b=0; b<ids.length;b++) {
-                                    if (idAlexaLastState[a].ids[ids[b]] === undefined && getState(replacePlaceholder(idAlexaState, ids[b])).val) {
-                                        idAlexaLastState[a].ids[ids[b]] = true;
-                                        setState(replacePlaceholder(idAlexaPause, ids[b]), true)
-                                    }
-                                }
-                            }
-                            if (alexaVolumen[a] && extendedExists(replacePlaceholder(idAlexaVolumen, idAlexaSerial[a]))) {
-                                if (idAlexaLastState[a].volumen === undefined) idAlexaLastState[a].volumen = getState(replacePlaceholder(idAlexaVolumen, idAlexaSerial[a])).val
-                                if (idAlexaLastState[a].volumen != alexaVolumen[a]) setState(replacePlaceholder(idAlexaVolumen, idAlexaSerial[a]), alexaVolumen[a]);
-                            }
-                            if (idAlexaLastState[a].timeout) clearTimeout(idAlexaLastState[a].timeout)
-
-                            idAlexaLastState[a].timeout = setTimeout(function(a){
-                                if (idAlexaLastState[a].play) setState(replacePlaceholder(idAlexaPlay, idAlexaSerial[a]), true)
-                                if (alexaVolumen[a] && idAlexaLastState[a].volumen !== undefined && idAlexaLastState[a].volumen != alexaVolumen[a]) setState(replacePlaceholder(idAlexaVolumen, idAlexaSerial[a]), idAlexaLastState[a].volumen);
-                                let textids = getState(replacePlaceholder(idAlexaParents, idAlexaSerial[a])).val
-                                ids = [];
-                                if (alexaMultiroomParentsOff && textids) {
-                                     ids = textids.split(',')
-                                    for (let b=0; b<ids.length;b++) {
-                                        if (idAlexaLastState[a].ids[ids[b]]) {
-                                            setState(replacePlaceholder(idAlexaPlay, ids[b]), true)
-                                        }
-                                    }
-                                }
-                                idAlexaLastState[a] = {ids:{}};
-                            }, nTime.getTime() - new Date().getTime() + 500, a)
-
-                            if (alexaVolumen[a]) setState(replacePlaceholder(idAlexa, idAlexaSerial[a]), entry.msg + _getMsgCountString(_speakToArray, entry.dienst));
-                            ticaLog(2,'Dienst: ' + replacePlaceholder(idAlexa, idAlexaSerial[a]) + ' Nachricht: ' + entry.msg + _getMsgCountString(_speakToArray, entry.dienst))
+                            if (extendedExists(replacePlaceholder(idAlexaVolumen, idAlexaSerial[a]))) setState(replacePlaceholder(idAlexaVolumen, idAlexaSerial[a]), alexaVolumen[a]);
+                            setState(replacePlaceholder(idAlexa, idAlexaSerial[a]), entry.msg + _getMsgCountString(_speakToArray, entry.dienst));
+                             ticaLog(2,'Dienst: ' + replacePlaceholder(idAlexa, idAlexaSerial[a]) + ' Nachricht: ' + entry.msg + _getMsgCountString(_speakToArray, entry.dienst))
                         }
                     }
                     ticaLog(4, 'Länge der auszugebenen Sprachnachricht: ' + (entry.endTimeSpeak.getTime() - entry.startTimeSpeak));
